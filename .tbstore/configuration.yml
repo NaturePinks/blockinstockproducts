@@ -1,0 +1,22 @@
+module_name: Block In Stock Products
+compatible_versions: 1.0.0+
+author: NaturePinks (naturepinks@gmail.com)
+category: front office
+tags:
+  - products
+  - stock tab
+  - products in stock
+  - show stock tab
+  - quantity
+  - home page
+description_short: The block in stock products module allows you to place in stock products on your home page or right and left columns of your site.
+description: description.md
+images:
+  - image-1.png
+license: MIT
+php_version:
+  - 5.5
+  - 5.6
+  - 7.0
+  - 7.1
+  - 7.2
