@@ -40,6 +40,7 @@ class BlockInStockProducts extends Module
     const CACHE_TIMESTAMP = 'PS_BLOCK_INSTOCKPRODUCTS_TIMESTAMP';
     const INSTOCKPRODUCTS_DISPLAY = 'PS_BLOCK_INSTOCKPRODUCTS_DISPLAY';
     const INSTOCKPRODUCTS_TO_DISPLAY = 'PS_BLOCK_INSTOCKPRODUCTS_TO_DISPLAY';
+	const INSTOCKPRODUCTS_RANDOM = 'PS_BLOCK_INSTOCKPRODUCTS_RANDOM';
 
     protected static $cacheInStockProducts;
 
@@ -53,7 +54,7 @@ class BlockInStockProducts extends Module
     {
         $this->name = 'blockinstockproducts';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
+        $this->version = '1.0.1';
         $this->author = 'NaturePinks';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -188,6 +189,10 @@ class BlockInStockProducts extends Module
                 static::INSTOCKPRODUCTS_TO_DISPLAY,
                 (int) Tools::getValue(static::INSTOCKPRODUCTS_TO_DISPLAY)
             );
+			Configuration::updateValue(
+                static::INSTOCKPRODUCTS_RANDOM,
+                (int) Tools::getValue(static::INSTOCKPRODUCTS_RANDOM)
+            );
             Configuration::updateValue(
                 static::CACHE_TTL,
                 (int) Tools::getValue(static::CACHE_TTL) * 60
@@ -229,6 +234,25 @@ class BlockInStockProducts extends Module
                         'label'   => $this->l('Always display this block'),
                         'name'    => static::INSTOCKPRODUCTS_DISPLAY,
                         'desc'    => $this->l('Show the block even if no in stock products are available - possibly works in right column alone, for a future version'),
+                        'is_bool' => true,
+                        'values'  => [
+                            [
+                                'id'    => 'active_on',
+                                'value' => 1,
+                                'label' => $this->l('Enabled'),
+                            ],
+                            [
+                                'id'    => 'active_off',
+                                'value' => 0,
+                                'label' => $this->l('Disabled'),
+                            ],
+                        ],
+                    ],
+					[
+                        'type'    => 'switch',
+                        'label'   => $this->l('Randomize products'),
+                        'name'    => static::INSTOCKPRODUCTS_RANDOM,
+                        'desc'    => $this->l('Randomize products positions on each cache rebuild.'),
                         'is_bool' => true,
                         'values'  => [
                             [
@@ -299,6 +323,10 @@ class BlockInStockProducts extends Module
                 static::INSTOCKPRODUCTS_DISPLAY,
                 Configuration::get(static::INSTOCKPRODUCTS_DISPLAY)
             ),
+			static::INSTOCKPRODUCTS_RANDOM    => (int) Tools::getValue(
+                static::INSTOCKPRODUCTS_RANDOM,
+                Configuration::get(static::INSTOCKPRODUCTS_RANDOM)
+            ),
             static::CACHE_TTL              => (int) Tools::getValue(
                     static::CACHE_TTL,
                     Configuration::get(static::CACHE_TTL) / 60
@@ -368,17 +396,31 @@ class BlockInStockProducts extends Module
      */
     protected function getInStockProducts()
     {
-        // NP: Params in original function getNewProducts are locally defined
-        $orderWay = 'ASC';
-        $context = Context::getContext();
+		if (Configuration::get(static::INSTOCKPRODUCTS_RANDOM) == 1)
+		{
+			$orderWay = array('ASC', 'DESC')[mt_rand(0,1)];
+			$orderBy = array(
+				'price',
+				'name',
+				'date_add',
+				'date_upd',
+				'id_product',
+				)[mt_rand(0,4)];
+		}
+		else
+		{
+			// NP: Params in original function getNewProducts are locally defined
+			$orderWay = 'ASC';
+			$orderBy = 'position';
+		}
         $pageNumber = 0;
         $nbProducts = (int) Configuration::get(static::INSTOCKPRODUCTS_TO_DISPLAY);
         $idLang = (int) $this->context->language->id;
-        $orderBy = 'position';
+        
         $count = false;
 
         $front = true;
-        if (!in_array($context->controller->controller_type, ['front', 'modulefront'])) {
+        if (!in_array($this->context->controller->controller_type, ['front', 'modulefront'])) {
             $front = false;
         }
 
@@ -444,7 +486,7 @@ class BlockInStockProducts extends Module
             'p.`id_product` = pl.`id_product`
 			AND pl.`id_lang` = '.(int) $idLang.Shop::addSqlRestrictionOnLang('pl')
         );
-        $sql->leftJoin('image_shop', 'image_shop', 'image_shop.`id_product` = p.`id_product` AND image_shop.cover=1 AND image_shop.id_shop='.(int) $context->shop->id);
+        $sql->leftJoin('image_shop', 'image_shop', 'image_shop.`id_product` = p.`id_product` AND image_shop.cover=1 AND image_shop.id_shop='.(int) $this->context->shop->id);
         $sql->leftJoin('image_lang', 'il', 'image_shop.`id_image` = il.`id_image` AND il.`id_lang` = '.(int) $idLang);
         $sql->leftJoin('manufacturer', 'm', 'm.`id_manufacturer` = p.`id_manufacturer`');
 
@@ -468,7 +510,7 @@ class BlockInStockProducts extends Module
 
         if (Combination::isFeatureActive()) {
             $sql->select('product_attribute_shop.minimal_quantity AS product_attribute_minimal_quantity, IFNULL(product_attribute_shop.id_product_attribute,0) id_product_attribute');
-            $sql->leftJoin('product_attribute_shop', 'product_attribute_shop', 'p.`id_product` = product_attribute_shop.`id_product` AND product_attribute_shop.`default_on` = 1 AND product_attribute_shop.id_shop='.(int) $context->shop->id);
+            $sql->leftJoin('product_attribute_shop', 'product_attribute_shop', 'p.`id_product` = product_attribute_shop.`id_product` AND product_attribute_shop.`default_on` = 1 AND product_attribute_shop.id_shop='.(int) $this->context->shop->id);
         }
         $sql->join(Product::sqlStock('p', 0));
 		// print $sql;
