@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright (C) 2017-2018 thirty bees
+ * Copyright (C) 2017-2019 thirty bees
  * Copyright (C) 2007-2016 PrestaShop SA
  *
  * thirty bees is an extension to the PrestaShop software by PrestaShop SA.
@@ -18,51 +18,54 @@
  * @author    NaturePinks <naturepinks@gmail.com>
  * @author    thirty bees <modules@thirtybees.com>
  * @author    PrestaShop SA <contact@prestashop.com>
- * @copyright 2017-2018 NaturePinks
- * @copyright 2017-2018 thirty bees
+ * @copyright 2017-2020 NaturePinks
+ * @copyright 2017-2019 thirty bees
  * @copyright 2007-2016 PrestaShop SA
  * @license   Academic Free License (AFL 3.0)
  * PrestaShop is an internationally registered trademark of PrestaShop SA.
  */
 
 if (!defined('_TB_VERSION_')) {
-    exit;
+    return;
 }
 
 /**
  * Class BlockInStockProducts
- *
- * @since 1.0.0
  */
 class BlockInStockProducts extends Module
 {
-    const CACHE_TTL = 'PS_BLOCK_INSTOCKPRODUCTS_TTL';
-    const CACHE_TIMESTAMP = 'PS_BLOCK_INSTOCKPRODUCTS_TIMESTAMP';
-    const INSTOCKPRODUCTS_DISPLAY = 'PS_BLOCK_INSTOCKPRODUCTS_DISPLAY';
-    const INSTOCKPRODUCTS_TO_DISPLAY = 'PS_BLOCK_INSTOCKPRODUCTS_TO_DISPLAY';
+    const CACHE_TTL = 'BLOCK_INSTOCK_PRODUCTS_TTL';
+    const CACHE_TIMESTAMP = 'BLOCK_INSTOCK_PRODUCTS_TIMESTAMP';
 
-    protected static $cacheInStockProducts;
+    const NUMBER = 'BLOCK_INSTOCK_PRODUCTS_NUM_TO_DISPLAY';
+    //const NUMBER_OF_DAYS = 'PS_NB_DAYS_NEW_PRODUCT';
+    const ALWAYS_DISPLAY = 'BLOCK_INSTOCK_PRODUCTS_ALWAYS_DISPLAY';
+
+    // @codingStandardsIgnoreStart
+    /** @var array $cache_instock_products */
+    protected static $cache_instock_products;
+    // @codingStandardsIgnoreEnd
 
     /**
      * BlockInStockProducts constructor.
      *
-     * @since 1.0.0
      * @throws PrestaShopException
      */
     public function __construct()
     {
         $this->name = 'blockinstockproducts';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
+        $this->version = '2.2.2';
         $this->author = 'NaturePinks';
         $this->need_instance = 0;
-        $this->bootstrap = true;
 
+        $this->bootstrap = true;
         parent::__construct();
 
         $this->displayName = $this->l('Block In Stock Products');
-        $this->description = $this->l('Adds a block displaying your store\'s in stock products.');
+        $this->description = $this->l('Displays a block displaying your store\'s in stock products.');
         $this->tb_versions_compliancy = '> 1.0.0';
+        $this->tb_min_version = '1.0.0';
 
         if (Configuration::get(static::CACHE_TIMESTAMP) < (time() - Configuration::get(static::CACHE_TTL))) {
             $this->clearCache();
@@ -71,54 +74,31 @@ class BlockInStockProducts extends Module
 
     /**
      * @return bool
-     *
      * @throws PrestaShopDatabaseException
      * @throws PrestaShopException
-     * @since 1.0.0
      */
     public function install()
     {
-        $this->clearCache();
-
-        if (!parent::install()
-            || !$this->registerHook('header')
-            || !$this->registerHook('leftColumn')
-            || !$this->registerHook('actionOrderStatusPostUpdate')
-            || !$this->registerHook('addproduct')
-            || !$this->registerHook('updateproduct')
-            || !$this->registerHook('deleteproduct')
-            || !$this->registerHook('displayHomeTab')
-            || !$this->registerHook('displayHomeTabContent')
-            || !ProductSale::fillProductSales()
-        ) {
+        if (!parent::install()) {
             return false;
         }
 
-        Configuration::updateValue(static::INSTOCKPRODUCTS_TO_DISPLAY, 10);
+        $this->registerHook('header');
+        $this->registerHook('leftColumn');
+        $this->registerHook('addproduct');
+        $this->registerHook('updateproduct');
+        $this->registerHook('deleteproduct');
+        $this->registerHook('displayHomeTab');
+        $this->registerHook('displayHomeTabContent');
+
+        //defaults        
+        Configuration::updateValue('BLOCK_INSTOCK_PRODUCTS_NUM_TO_DISPLAY', 12);
+        Configuration::updateValue('BLOCK_INSTOCK_PRODUCTS_TTL', 300);
+        Configuration::updateValue('BLOCK_INSTOCK_PRODUCTS_ALWAYS_DISPLAY', 0);
+        
+        $this->clearCache();
 
         return true;
-    }
-
-    /**
-     * @since 1.0.0
-     */
-    public function clearCache()
-    {
-        try {
-            $caches = [
-                'blockinstockproducts.tpl'      => 'blockinstockproducts-col',
-                'blockinstockproducts-home.tpl' => 'blockinstockproducts-home',
-                'tab.tpl'                   => 'blockinstockproducts-tab',
-            ];
-
-            foreach ($caches as $template => $cacheId) {
-                Tools::clearCache(Context::getContext()->smarty, $this->getTemplatePath($template), $cacheId);
-            }
-
-            Configuration::updateValue(static::CACHE_TIMESTAMP, time());
-        } catch (Exception $e) {
-            Logger::addLog("Block in stock products module: {$e->getMessage()}");
-        }
     }
 
     /**
@@ -126,50 +106,23 @@ class BlockInStockProducts extends Module
      *
      * @throws PrestaShopDatabaseException
      * @throws PrestaShopException
-     * @since 1.0.0
      */
     public function uninstall()
     {
         $this->clearCache();
 
+        Configuration::deleteByName('BLOCK_INSTOCK_PRODUCTS_NUM_TO_DISPLAY');
+        //Configuration::deleteByName(static::NUMBER_OF_DAYS);        
+        Configuration::deleteByName(static::ALWAYS_DISPLAY);
+        Configuration::deleteByName(static::NUMBER);
+        Configuration::deleteByName(static::CACHE_TTL);
+        Configuration::deleteByName(static::CACHE_TIMESTAMP);
+        Configuration::deleteByName('BLOCK_INSTOCK_PRODUCTS_TIMESTAMP');
+
         return parent::uninstall();
     }
 
     /**
-     * @since 1.0.0
-     */
-    public function hookAddProduct()
-    {
-        $this->clearCache();
-    }
-
-    /**
-     * @since 1.0.0
-     */
-    public function hookUpdateProduct()
-    {
-        $this->clearCache();
-    }
-
-    /**
-     * @since 1.0.0
-     */
-    public function hookDeleteProduct()
-    {
-        $this->clearCache();
-    }
-
-    /**
-     * @since 1.0.0
-     */
-    public function hookActionOrderStatusPostUpdate()
-    {
-        $this->clearCache();
-    }
-
-    /**
-     * Called in administration -> module -> configure
-     *
      * @return string
      * @throws Exception
      * @throws PrestaShopDatabaseException
@@ -178,27 +131,202 @@ class BlockInStockProducts extends Module
      */
     public function getContent()
     {
+        //All except number of days field
         $output = '';
         if (Tools::isSubmit('submitInStockProducts')) {
-            Configuration::updateValue(
-                static::INSTOCKPRODUCTS_DISPLAY,
-                (int) Tools::getValue(static::INSTOCKPRODUCTS_DISPLAY)
-            );
-            Configuration::updateValue(
-                static::INSTOCKPRODUCTS_TO_DISPLAY,
-                (int) Tools::getValue(static::INSTOCKPRODUCTS_TO_DISPLAY)
-            );
-            Configuration::updateValue(
-                static::CACHE_TTL,
-                (int) Tools::getValue(static::CACHE_TTL) * 60
-            );
-            $this->clearCache();
-            $output .= $this->displayConfirmation($this->l('Settings updated'));
+            if (!($productNbr = Tools::getValue(static::NUMBER)) || empty($productNbr)) {
+                $output .= $this->displayError($this->l('Please enter a valid number of "products to display".'));
+            } elseif ((int) ($productNbr) == 0) {
+                $output .= $this->displayError($this->l('Invalid number.'));
+            } else {
+                Configuration::updateValue(
+                    static::ALWAYS_DISPLAY,
+                    (int) (Tools::getValue(static::ALWAYS_DISPLAY))
+                );
+                Configuration::updateValue(static::NUMBER, (int) ($productNbr));
+                Configuration::updateValue(
+                    static::CACHE_TTL,
+                    (int) (Tools::getValue(static::CACHE_TTL) * 60)
+                );
+                $this->clearCache();
+                $output .= $this->displayConfirmation($this->l('Settings updated'));
+            }
+        }
+        return $output.$this->renderForm();    }
+
+    /**
+     * getInStockProducts() is a replacement for local getNewProducts() 
+     * getProductsInStock() is based on Product::getNewProducts()
+     * @return array
+     * @throws PrestaShopException
+     */
+    protected function getInStockProducts()
+    {
+        if (!Configuration::get(static::NUMBER)) {
+            return [];
         }
 
-        return $output.$this->renderForm();
+        $inStockProducts = false;
+        //if (Configuration::get(static::NUMBER_OF_DAYS)) {
+            $inStockProducts = Self::getProductsInStock(
+                (int) $this->context->language->id, 0,
+                (int) Configuration::get(static::NUMBER)
+            );
+        //}
+
+        if (!$inStockProducts && Configuration::get(static::ALWAYS_DISPLAY)) {
+            return [];
+        }
+
+        return $inStockProducts;
     }
 
+    /**
+     * @return bool|string
+     *
+     * @throws Exception
+     * @throws PrestaShopDatabaseException
+     * @throws PrestaShopException
+     * @throws SmartyException
+     */
+    public function hookRightColumn()
+    {
+        if (!$this->isCached('blockinstockproducts.tpl', $this->getCacheId())) {
+            if (!isset(BlockInStockProducts::$cache_instock_products)) {
+                BlockInStockProducts::$cache_instock_products = $this->getInStockProducts();
+            }
+            $this->smarty->assign([
+                    'instock_products' => BlockInStockProducts::$cache_instock_products,
+                // Retrocompatibility with < 1.1.1.
+                'mediumSize'   => Image::getSize(ImageType::getFormatedName('medium')),
+                ]);
+        }
+
+        if (!BlockInStockProducts::$cache_instock_products) {
+            return false;
+        }
+
+        return $this->display(__FILE__, 'blockinstockproducts.tpl', $this->getCacheId());
+    }
+
+    /**
+     * @param string|null $name
+     *
+     * @return string
+     */
+    protected function getCacheId($name = null)
+    {
+        if ($name === null) {
+            $name = 'blockinstockproducts';
+        }
+
+        return parent::getCacheId($name.'|'.date('Ymd'));
+    }
+
+    /**
+     * @return bool|string
+     * @throws Exception
+     * @throws PrestaShopDatabaseException
+     * @throws PrestaShopException
+     * @throws SmartyException
+     */
+    public function hookLeftColumn()
+    {
+        return $this->hookRightColumn();
+    }
+
+    /**
+     * @return bool|string
+     * @throws Exception
+     * @throws PrestaShopException
+     * @throws SmartyException
+     */
+    public function hookDisplayHomeTab()
+    {
+        if (!$this->isCached('tab.tpl', $this->getCacheId('blockinstockproducts-tab'))) {
+            BlockInStockProducts::$cache_instock_products = $this->getInStockProducts();
+        }
+
+        if (BlockInStockProducts::$cache_instock_products === false) {
+            return false;
+        }
+
+        return $this->display(__FILE__, 'tab.tpl', $this->getCacheId('blockinstockproducts-tab'));
+    }
+    /**
+     * @return bool|string
+     * @throws Exception
+     * @throws PrestaShopDatabaseException
+     * @throws PrestaShopException
+     * @throws SmartyException
+     */
+    public function hookdisplayHomeTabContent()
+    {
+        if (!$this->isCached(
+            'blockinstockproducts_home.tpl',
+            $this->getCacheId('blockinstockproducts-home'))
+        ) {
+            $this->smarty->assign([
+                'instock_products' => BlockInStockProducts::$cache_instock_products,
+                // Retrocompatibility with < 1.1.1.
+                'mediumSize'   => Image::getSize(ImageType::getFormatedName('medium')),
+            ]);
+        }
+
+        if (BlockInStockProducts::$cache_instock_products === false) {
+            return false;
+        }
+
+        return $this->display(
+            __FILE__,
+            'blockinstockproducts_home.tpl',
+            $this->getCacheId('blocknewproducts-home')
+        );
+    }
+
+    public function hookHeader($params)
+    {
+        if (isset($this->context->controller->php_self) && $this->context->controller->php_self == 'index') {
+            $this->context->controller->addCSS(_THEME_CSS_DIR_.'product_list.css');
+        }
+        
+        $this->context->controller->addCSS($this->_path.'blockinstockproducts.css', 'all');
+    }
+    
+    public function hookAddProduct()
+    {
+        $this->clearCache();
+    }
+
+    public function hookUpdateProduct()
+    {
+        $this->clearCache();
+    }
+
+    public function hookDeleteProduct()
+    {
+        $this->clearCache();
+    }
+
+    /**
+     * @return void
+     * @throws PrestaShopException
+     */
+    public function clearCache()
+    {
+            $caches = [
+                'blockinstockproducts.tpl'      => null,
+                'blockinstockproducts_home.tpl' => 'blockinstockproducts-home',
+                'tab.tpl'                   => 'blockinstockproducts-tab',
+            ];
+
+            foreach ($caches as $template => $cacheId) {
+                Tools::clearCache(Context::getContext()->smarty, $this->getTemplatePath($template), $cacheId);
+            }
+
+            Configuration::updateValue(static::CACHE_TIMESTAMP, time());
+        } 
+    
     /**
      * @return string
      *
@@ -206,7 +334,6 @@ class BlockInStockProducts extends Module
      * @throws PrestaShopDatabaseException
      * @throws PrestaShopException
      * @throws SmartyException
-     * @since 1.0.0
      */
     public function renderForm()
     {
@@ -220,16 +347,23 @@ class BlockInStockProducts extends Module
                     [
                         'type'  => 'text',
                         'label' => $this->l('Products to display'),
-                        'name'  => static::INSTOCKPRODUCTS_TO_DISPLAY,
-                        'desc'  => $this->l('Determine the number of products to display, 0 for all'),
+                        'name'  => static::NUMBER,
+                        'class' => 'fixed-width-xs',
+                        'desc'  => $this->l('Number of products to display'),
+                    ],
+                    /* Not needed for this module
+                    [
+                        'type'  => 'text',
+                        'label' => $this->l('Number of days for which the product is considered \'new\''),
+                        'name'  => static::NUMBER_OF_DAYS,
                         'class' => 'fixed-width-xs',
                     ],
+                    */
                     [
                         'type'    => 'switch',
                         'label'   => $this->l('Always display this block'),
-                        'name'    => static::INSTOCKPRODUCTS_DISPLAY,
-                        'desc'    => $this->l('Show the block even if no in stock products are available - possibly works in right column alone, for a future version'),
-                        'is_bool' => true,
+                        'name'    => static::ALWAYS_DISPLAY,
+                        'desc'    => $this->l('Show the block even if no in stock products are available'),
                         'values'  => [
                             [
                                 'id'    => 'active_on',
@@ -247,7 +381,7 @@ class BlockInStockProducts extends Module
                         'type'   => 'text',
                         'label'  => $this->l('Cache lifetime'),
                         'name'   => static::CACHE_TTL,
-                        'desc'   => $this->l('Determines for how long the instockproducts block stays cached'),
+                        'desc'   => $this->l('Determines how long this block stays cached'),
                         'suffix' => $this->l('Minutes'),
                         'class'  => 'fixed-width-xs',
                     ],
@@ -266,8 +400,6 @@ class BlockInStockProducts extends Module
         $helper->allow_employee_form_lang = Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG')
             ? Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG')
             : 0;
-        $this->fields_form = [];
-
         $helper->identifier = $this->identifier;
         $helper->submit_action = 'submitInStockProducts';
         $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false)
@@ -280,75 +412,40 @@ class BlockInStockProducts extends Module
         ];
 
         return $helper->generateForm([$formFields]);
-    }
-
+    }    
+    
     /**
      * @return array
-     *
-     * @since 1.0.0
      * @throws PrestaShopException
      */
     public function getConfigFieldsValues()
     {
         return [
-            static::INSTOCKPRODUCTS_TO_DISPLAY => (int) Tools::getValue(
-                static::INSTOCKPRODUCTS_TO_DISPLAY,
-                Configuration::get(static::INSTOCKPRODUCTS_TO_DISPLAY)
+            /* Not needed for this module
+            static::NUMBER_OF_DAYS => Tools::getValue(
+                static::NUMBER_OF_DAYS,
+                Configuration::get(static::NUMBER_OF_DAYS)
+            ),     
+            */
+            static::ALWAYS_DISPLAY => Tools::getValue(
+                static::ALWAYS_DISPLAY,
+                Configuration::get(static::ALWAYS_DISPLAY)
             ),
-            static::INSTOCKPRODUCTS_DISPLAY    => (int) Tools::getValue(
-                static::INSTOCKPRODUCTS_DISPLAY,
-                Configuration::get(static::INSTOCKPRODUCTS_DISPLAY)
+            static::NUMBER         => Tools::getValue(
+                static::NUMBER,
+                Configuration::get(static::NUMBER)
             ),
-            static::CACHE_TTL              => (int) Tools::getValue(
+            static::CACHE_TTL      => Tools::getValue(
                     static::CACHE_TTL,
                     Configuration::get(static::CACHE_TTL) / 60
                 ),
         ];
     }
 
-    /**
-     * @since 1.0.0
-     * @throws PrestaShopException
-     */
-    public function hookHeader()
-    {
-        if (Configuration::get('PS_CATALOG_MODE')) {
-            return;
-        }
-        if (isset($this->context->controller->php_self) && $this->context->controller->php_self == 'index') {
-            $this->context->controller->addCSS(_THEME_CSS_DIR_.'product_list.css');
-        }
-        $this->context->controller->addCSS($this->_path.'blockinstockproducts.css', 'all');
-    }
-
-    /**
-     * @return bool|string
-     *
-     * @throws Exception
-     * @throws PrestaShopDatabaseException
-     * @throws PrestaShopException
-     * @throws SmartyException
-     * @since 1.0.0
-     */
-    public function hookDisplayHomeTab()
-    {
-        if (!$this->isCached('tab.tpl', $this->getCacheId('blockinstockproducts-tab'))) {
-            self::$cacheInStockProducts = $this->getInStockProducts();
-            $this->smarty->assign('in_stock_products', self::$cacheInStockProducts);
-        }
-
-        if (self::$cacheInStockProducts === false) {
-            return false;
-        }
-
-        return $this->display(__FILE__, 'tab.tpl', $this->getCacheId('blockinstockproducts-tab'));
-    }
-
-        /**
-     * NP: Get In Stock products - based on getNewProducts standard function
+    /** -----------
+     * NP Local Function: getProductsInStock - based on Product::getNewProducts core function
      * Date difference check is replaced with stock quantity check
-     * These parameters are all defined within the function 
-     * Minimal changes from original function for future compatibility
+     * OrderBy, OrderWay, nbProducts are changed from original 
      *
      * @param int     $idLang     Language id
      * @param int     $pageNumber Start from (optional)
@@ -366,35 +463,29 @@ class BlockInStockProducts extends Module
      * @throws PrestaShopException
      * @throws PrestaShopDatabaseException
      */
-    protected function getInStockProducts()
-    {
-        // NP: Params in original function getNewProducts are locally defined
-        $orderWay = 'ASC';
-        $context = Context::getContext();
-        $pageNumber = 0;
-        $nbProducts = (int) Configuration::get(static::INSTOCKPRODUCTS_TO_DISPLAY);
-        $idLang = (int) $this->context->language->id;
-        $orderBy = 'position';
-        $count = false;
-
+    protected function getProductsInStock($idLang, $pageNumber = 0, $nbProducts = 12, $count = false, $orderBy = 'name', $orderWay = 'ASC', Context $context = null)
+    {       
+        if (!$context) {
+            $context = Context::getContext();
+        }
+        
         $front = true;
         if (!in_array($context->controller->controller_type, ['front', 'modulefront'])) {
             $front = false;
         }
 
-        // if ($pageNumber < 0) {
-        //     $pageNumber = 0;
-        // }
-        // if ($nbProducts < 1) {
-        //     $nbProducts = 10;
-        // }
+        if ($pageNumber < 0) {
+            $pageNumber = 0;
+        }
+        if ($nbProducts < 1) {
+            $nbProducts = 12;
+        }
         if (empty($orderBy) || $orderBy == 'position') {
             $orderBy = 'date_add';
         }
         if (empty($orderWay)) {
             $orderWay = 'DESC';
-        } 
-
+        }
         if ($orderBy == 'id_product' || $orderBy == 'price' || $orderBy == 'date_add' || $orderBy == 'date_upd') {
             $orderByPrefix = 'product_shop';
         } elseif ($orderBy == 'name') {
@@ -470,8 +561,8 @@ class BlockInStockProducts extends Module
             $sql->select('product_attribute_shop.minimal_quantity AS product_attribute_minimal_quantity, IFNULL(product_attribute_shop.id_product_attribute,0) id_product_attribute');
             $sql->leftJoin('product_attribute_shop', 'product_attribute_shop', 'p.`id_product` = product_attribute_shop.`id_product` AND product_attribute_shop.`default_on` = 1 AND product_attribute_shop.id_shop='.(int) $context->shop->id);
         }
+        //static -> Product
         $sql->join(Product::sqlStock('p', 0));
-		// print $sql;
         $result = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS($sql);
 
         if (!$result) {
@@ -488,100 +579,9 @@ class BlockInStockProducts extends Module
         }
         // Thus you can avoid one query per product, because there will be only one query for all the products of the cart
         Product::cacheFrontFeatures($productsIds, $idLang);
-
+        
+        //static -> Product
         return Product::getProductsProperties((int) $idLang, $result);
     }
-
-
-    /**
-     * @return bool|string
-     *
-     * @throws Exception
-     * @throws PrestaShopDatabaseException
-     * @throws PrestaShopException
-     * @throws SmartyException
-     * @since 1.0.0
-     */
-    public function hookDisplayHomeTabContent()
-    {
-        return $this->hookDisplayHome();
-    }
-
-    /**
-     * @return bool|string
-     *
-     * @throws Exception
-     * @throws PrestaShopDatabaseException
-     * @throws PrestaShopException
-     * @throws SmartyException
-     * @since 1.0.0
-     */
-    public function hookDisplayHome()
-    {
-        if (!$this->isCached('blockinstockproducts-home.tpl', $this->getCacheId('blockinstockproducts-home'))) {
-            $this->smarty->assign(
-                [
-                    'in_stock_products' => self::$cacheInStockProducts,
-                    'homeSize'     => Image::getSize(ImageType::getFormatedName('home')),
-                ]
-            );
-        }
-
-        if (self::$cacheInStockProducts === false) {
-            return false;
-        }
-
-        return $this->display(
-            __FILE__,
-            'blockinstockproducts-home.tpl',
-            $this->getCacheId('blockinstockproducts-home')
-        );
-    }
-
-    /**
-     * @return bool|string
-     *
-     * @throws Exception
-     * @throws PrestaShopDatabaseException
-     * @throws PrestaShopException
-     * @throws SmartyException
-     * @since 1.0.0
-     */
-    public function hookLeftColumn()
-    {
-        return $this->hookRightColumn();
-    }
-
-    /**
-     * @return bool|string
-     *
-     * @throws Exception
-     * @throws PrestaShopDatabaseException
-     * @throws PrestaShopException
-     * @throws SmartyException
-     * @since 1.0.0
-     */
-    public function hookRightColumn()
-    {
-        if (!$this->isCached('blockinstockproducts.tpl', $this->getCacheId('blockinstockproducts-col'))) {
-            if (!isset(self::$cacheInStockProducts)) {
-                self::$cacheInStockProducts = $this->getInStockProducts();
-            }
-            $this->smarty->assign(
-                [
-                    'in_stock_products'             => self::$cacheInStockProducts,
-                    'display_link_instockproducts' => Configuration::get(static::INSTOCKPRODUCTS_DISPLAY),
-                    'mediumSize'               => Image::getSize(ImageType::getFormatedName('medium')),
-                    'smallSize'                => Image::getSize(ImageType::getFormatedName('small')),
-                ]
-            );
-        }
-
-        if (self::$cacheInStockProducts === false) {
-            return false;
-        }
-
-        return $this->display(__FILE__, 'blockinstockproducts.tpl', $this->getCacheId('blockinstockproducts-col'));
-    }
-
+    
 }
