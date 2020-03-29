@@ -8,9 +8,10 @@ The module is standalone and uses no overrides.
 ## Install
 Install though thirtybees' module installation procedure. From the modules page, upload and install.
 Enable for the shop/shop group you wish to and update the configuration settings on the configuration page.
+v2.2.2 is synced with v2.2.2 of Block New Products, no new functionality.
 
 ## Settings
-The module supports settings of number of products to display (zero means all in stock products), always display this block regardless of stocked products (experimental, it appears this works only for the right block), and cache time in minutes.
+The module supports settings of number of products to display, always display this block regardless of stocked products, and cache time in minutes.
 
 To make the module show on home or a specific column and before or after other modules, adjust the module position under Modules and Services - Positions.
 
